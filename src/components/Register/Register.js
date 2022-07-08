@@ -24,8 +24,6 @@ class Register extends Component {
     }
 
     onRegister = () => {
-        // console.log(this.state);
-
         fetch(`${process.env.REACT_APP_BACKEND_URL}register`, {
             method: 'POST',
             headers: {'content-type': 'application/json'},
