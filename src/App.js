@@ -11,14 +11,12 @@ import Register from './components/Register/Register';
 import Particles from "react-tsparticles";
 import {loadFull} from "tsparticles";
 
-import Clarifai from 'clarifai'
-
 const particlesOptions = {
     fpsLimit: 120,
     interactivity: {
         events: {
             onClick: {
-                enable: true,
+                enable: false,
                 mode: "push",
             },
             onHover: {
@@ -82,20 +80,25 @@ const particlesOptions = {
 
 }
 
-const app = new Clarifai.App({
-    apiKey: 'c4fe8b7d34bc4be6afb5d20ba9bde35f'
-});
+const initialState = {
+    input: '',
+    imageUrl: '',
+    box: {},
+    route: 'signIn',
+    isSignedIn: false,
+    user: {
+        id: '',
+        email: '',
+        name: '',
+        entries: 0,
+        joined: '',
+    }
+}
 
 class App extends Component {
     constructor() {
         super();
-        this.state = {
-            input: '',
-            imageUrl: '',
-            box: {},
-            route: 'signIn',
-            isSignedIn: false
-        }
+        this.state = initialState;
     }
 
     calculateFaceLocation = (data) => {
@@ -103,8 +106,6 @@ class App extends Component {
         const image = document.getElementById('inputImage');
         const width = Number(image.width);
         const height = Number(image.height);
-
-        // console.log(clarifaiFace);
 
         return {
             leftCol: (clarifaiFace.left_col * width),
@@ -124,26 +125,63 @@ class App extends Component {
     }
 
     onButtonSubmit = () => {
-        this.setState({imageUrl: this.state.input})
+        this.setState({imageUrl: this.state.input});
 
-        app.models.predict(
-            Clarifai.FACE_DETECT_MODEL,
-            this.state.input)
-            .then(response => this.displayFaceBox(this.calculateFaceLocation(response)))
-            .catch(err => console.log(err));
+        fetch(`${process.env.REACT_APP_BACKEND_URL}imageurl`, {
+            method: 'post',
+            headers: {'Content-type': 'application/json'},
+            body: JSON.stringify({
+                input: this.state.input
+            })
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response) {
+                    fetch(`${process.env.REACT_APP_BACKEND_URL}image`, {
+                        method: 'put',
+                        headers: {'Content-type': 'application/json'},
+                        body: JSON.stringify({
+                            id: this.state.user.id
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(count => {
+                            this
+                                .setState(Object
+                                    .assign(this.state.user, {entries: count}
+                                    )
+                                )
+                        })
+                        .catch(console.log);
+                }
+                this.displayFaceBox(this.calculateFaceLocation(response))
+            })
+            .catch(err => console.log(err))
     }
 
     onRouteChange = (route) => {
         if (route === 'signOut') {
-            this.setState({isSignedIn: false})
-        } else if(route === 'home'){
+            this.setState(initialState)
+        } else if (route === 'home') {
             this.setState({isSignedIn: true})
         }
         this.setState({route: route});
     }
 
+    loadUser = (data) => {
+        this.setState({
+            user: {
+                id: data.id,
+                email: data.email,
+                name: data.name,
+                entries: data.entries,
+                joined: data.joined,
+            }
+        });
+    }
+
     render() {
-        const { isSignedIn, imageUrl, route, box } = this.state;
+        const {isSignedIn, imageUrl, route, box} = this.state;
 
         const particlesInit = async (main) => {
             // console.log(main);
@@ -171,7 +209,10 @@ class App extends Component {
                     ? <div>
                         <Logo/>
 
-                        <Rank/>
+                        <Rank
+                            name={this.state.user.name}
+                            entries={this.state.user.entries}
+                        />
                         <ImageLinkForm
                             onInputChange={this.onInputChange}
                             onButtonSubmit={this.onButtonSubmit}
@@ -183,8 +224,8 @@ class App extends Component {
                     </div>
                     : (
                         route === 'signIn'
-                            ? <SignIn onRouteChange={this.onRouteChange}/>
-                            : <Register onRouteChange={this.onRouteChange}/>
+                            ? <SignIn loadUser={this.loadUser} onRouteChange={this.onRouteChange}/>
+                            : <Register loadUser={this.loadUser} onRouteChange={this.onRouteChange}/>
                     )
 
                 }
